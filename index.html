@@ -11,10 +11,10 @@
       <header class="header">
         <h1>
           <span class="title-prefix">PHYS</span>
-          Damped & Driven Harmonic Oscillator
+          Damped & Driven Harmonic Oscillator · Phase-Space + Spectrum
         </h1>
         <p class="subtitle">
-          Phase-space trajectory · ẍ + 2βẋ + ω₀²x = (F₀/m) cos(ωt)
+          ẍ + 2βẋ + ω₀²x = (F₀/m) cos(ωt) &nbsp;·&nbsp; RK4 + Hanning FFT
         </p>
       </header>
 
@@ -62,6 +62,25 @@
           </div>
         </div>
 
+        <div class="hud-block view-modes">
+          <p class="preset-label">View mode:</p>
+          <div class="view-modes-row">
+            <button data-view="phase" class="view-active">Phase-Space</button>
+            <button data-view="spectrum">Spectrum</button>
+            <button data-view="split">Split</button>
+          </div>
+          <div class="control-row" style="margin-top:8px;">
+            <label class="check">
+              <input type="checkbox" id="fft-log" />
+              <span>log scale</span>
+            </label>
+            <label class="check">
+              <input type="checkbox" id="fft-peaks" checked />
+              <span>Mark peaks</span>
+            </label>
+          </div>
+        </div>
+
         <div class="hud-block preset">
           <p class="preset-label">Quick presets:</p>
           <button data-preset="undamped">Undamped (β=0)</button>
@@ -80,18 +99,35 @@
           <div class="row"><span>Energy E</span><output id="energy">—</output></div>
           <div class="row"><span>Time t</span><output id="t-now">—</output></div>
         </div>
+
+        <div class="hud-block readout">
+          <div class="row"><span>FFT peak</span><output id="fft-peak">—</output></div>
+          <div class="row"><span>at ω =</span><output id="fft-peak-freq">—</output></div>
+          <div class="row"><span>DC level</span><output id="fft-dc">—</output></div>
+          <div class="row"><span>Window</span><output id="fft-window">1024</output></div>
+        </div>
       </div>
 
-      <div id="three-root"></div>
+      <div id="viewports">
+        <div id="three-root"></div>
+        <div id="spectrum-root">
+          <canvas id="spectrum-canvas"></canvas>
+          <div id="spectrum-overlay">
+            <span class="spectrum-tag">FFT |X(f)|</span>
+            <span id="spectrum-meta">f vs Hz (rad/s)</span>
+          </div>
+        </div>
+      </div>
 
       <aside id="legend">
-        <h3>Reading the phase-space</h3>
+        <h3>Reading the views</h3>
         <ul>
-          <li><b style="color:#7cf">Cyan trail</b>: damped oscillator (free or driven) — spirals inward when β > 0</li>
-          <li><b style="color:#fb6">Orange ball</b>: current state (x, ẋ)</li>
-          <li><b style="color:#f44">Red equator</b>: zero-velocity axis</li>
-          <li>Vertical axis = position x; horizontal axis = velocity ẋ</li>
-          <li>Hover + drag to orbit · Scroll to zoom</li>
+          <li><b style="color:#7cf">Cyan trail</b>: phase-space trajectory (3D)</li>
+          <li><b style="color:#fb6">Orange ball</b>: current (x, ẋ) state</li>
+          <li><b style="color:#aae">Blue FFT</b>: frequency magnitude |X(f)|</li>
+          <li><b style="color:#fb6">Orange line</b>: ω₀ (natural frequency)</li>
+          <li><b style="color:#f66">Red line</b>: ω (drive frequency)</li>
+          <li>Drag to orbit · Scroll to zoom · Toggle view mode</li>
         </ul>
       </aside>
     </div>

@@ -25,10 +25,16 @@ const els = {
   omega: $('omega'), omegaVal: $('omega-val'),
   reset: $('reset'), pause: $('pause'), step: $('step'),
   showEnergy: $('show-energy'), showGrid: $('show-grid'),
+  fftLog: $('fft-log'), fftPeaks: $('fft-peaks'),
   regime: $('regime'), qFactor: $('q-factor'),
   xNow: $('x-now'), vNow: $('v-now'),
   energy: $('energy'), tNow: $('t-now'),
+  fftPeak: $('fft-peak'), fftPeakFreq: $('fft-peak-freq'),
+  fftDC: $('fft-dc'), fftWindow: $('fft-window'),
   presetButtons: document.querySelectorAll('.preset button'),
+  viewButtons: document.querySelectorAll('.view-modes-row button'),
+  viewports: $('viewports'),
+  spectrumCanvas: $('spectrum-canvas'),
   threeRoot: $('three-root'),
 };
 
@@ -45,8 +51,17 @@ const STATE = {
   stepOnce: false,
   showEnergy: true,
   showGrid: true,
+  viewMode: 'phase',  // 'phase' | 'spectrum' | 'split'
+  fftLogScale: false,
+  fftMarkPeaks: true,
+  fftSize: 1024,        // must be power of 2
+  fftMagnitudes: null,  // computed each frame
+  fftMaxFreq: 0,
+  fftPeakMag: 0,
+  fftPeakFreq: 0,
+  fftDC: 0,
   history: [],  // ring buffer of [x, v, t] for trail
-  historyMax: 600,
+  historyMax: 2048,  // larger to feed FFT window
   energyHistory: [],
 };
 
@@ -294,6 +309,36 @@ els.showGrid.addEventListener('change', (e) => {
   gridGroup.visible = STATE.showGrid;
 });
 
+els.fftLog.addEventListener('change', (e) => {
+  STATE.fftLogScale = e.target.checked;
+});
+els.fftPeaks.addEventListener('change', (e) => {
+  STATE.fftMarkPeaks = e.target.checked;
+});
+
+// View mode toggling
+function setViewMode(mode) {
+  STATE.viewMode = mode;
+  els.viewports.dataset.mode = mode;
+  els.viewButtons.forEach((b) => {
+    b.classList.toggle('view-active', b.dataset.view === mode);
+  });
+  // Re-layout canvas after grid change
+  setTimeout(() => {
+    const w = els.threeRoot.clientWidth;
+    const h = els.threeRoot.clientHeight;
+    if (w > 0 && h > 0) {
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+  }, 280);  // wait for grid transition
+}
+
+els.viewButtons.forEach((b) => {
+  b.addEventListener('click', () => setViewMode(b.dataset.view));
+});
+
 // Presets
 const presets = {
   undamped:    { beta: 0.0,  omega0: 1.4, force: 0.0, omega: 1.4 },
@@ -332,6 +377,182 @@ function resetSim() {
 resetSim();
 
 // ---------- Main loop ----------
+// (FFT + spectrum rendering live here, just before the loop)
+
+// Iterative radix-2 FFT — re/im arrays of length 2^k (in-place)
+function fft(re, im) {
+  const n = re.length;
+  // bit-reversal permutation
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j |= bit;
+    if (i < j) {
+      [re[i], re[j]] = [re[j], re[i]];
+      [im[i], im[j]] = [im[j], im[i]];
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len;
+    const wRe = Math.cos(ang), wIm = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let curRe = 1, curIm = 0;
+      const half = len >> 1;
+      for (let k = 0; k < half; k++) {
+        const uRe = re[i + k], uIm = im[i + k];
+        const vRe = re[i + k + half] * curRe - im[i + k + half] * curIm;
+        const vIm = re[i + k + half] * curIm + im[i + k + half] * curRe;
+        re[i + k] = uRe + vRe;
+        im[i + k] = uIm + vIm;
+        re[i + k + half] = uRe - vRe;
+        im[i + k + half] = uIm - vIm;
+        const nRe = curRe * wRe - curIm * wIm;
+        curIm = curRe * wIm + curIm * wRe;
+        curRe = nRe;
+      }
+    }
+  }
+}
+
+// Hanning window — reduces spectral leakage at boundaries
+function hanningWindow(n) {
+  const w = new Float32Array(n);
+  for (let i = 0; i < n; i++) w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (n - 1));
+  return w;
+}
+
+const FFT_WIN = hanningWindow(STATE.fftSize);
+
+// Compute FFT of recent x(t) history
+function computeFFT() {
+  const n = STATE.fftSize;
+  const re = new Float32Array(n);
+  const im = new Float32Array(n);
+
+  // Sample most recent n samples from history
+  const hist = STATE.history;
+  const start = Math.max(0, hist.length - n);
+  const sampleCount = hist.length - start;
+
+  // Window + mean-remove
+  let mean = 0;
+  for (let i = start; i < hist.length; i++) mean += hist[i][0];
+  mean /= sampleCount;
+
+  for (let i = 0; i < n; i++) {
+    const srcIdx = i < sampleCount ? (start + i) : (start + sampleCount - 1);
+    const xVal = (hist[srcIdx] ? hist[srcIdx][0] : 0) - mean;
+    re[i] = xVal * FFT_WIN[i];
+    im[i] = 0;
+  }
+
+  fft(re, im);
+
+  // Magnitude spectrum (one-sided: use first half + Nyquist)
+  const halfN = n / 2;
+  const mags = new Float32Array(halfN);
+  let peakMag = 0, peakFreq = 0, dcLevel = 0;
+  for (let i = 0; i < halfN; i++) {
+    const mag = Math.sqrt(re[i] * re[i] + im[i] * im[i]) / n;
+    mags[i] = mag;
+    if (i === 0) dcLevel = mag;
+    // Skip DC, find dominant frequency peak above ~0.05 Hz
+    if (i > 0 && mag > peakMag) {
+      peakMag = mag;
+      peakFreq = i;  // index = freq bin
+    }
+  }
+  // freq bin resolution = (1 / (n * DT))
+  // i-th bin = i * (1 / (n * DT)) Hz
+  const freqRes = 1.0 / (n * DT);
+  STATE.fftMagnitudes = mags;
+  STATE.fftMaxFreq = halfN * freqRes;
+  STATE.fftPeakMag = peakMag;
+  STATE.fftPeakFreq = peakFreq * freqRes;
+  STATE.fftDC = dcLevel;
+}
+
+// Spectrum canvas renderer
+function renderSpectrum() {
+  const canvas = els.spectrumCanvas;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (w === 0 || h === 0) return;
+
+  if (canvas.width !== w * window.devicePixelRatio ||
+      canvas.height !== h * window.devicePixelRatio) {
+    canvas.width = w * window.devicePixelRatio;
+    canvas.height = h * window.devicePixelRatio;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  // Background grid
+  ctx.strokeStyle = 'rgba(124, 200, 255, 0.08)';
+  ctx.lineWidth = 1;
+  for (let f = 0; f <= STATE.fftMaxFreq; f += 0.5) {
+    const x = (f / STATE.fftMaxFreq) * w;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+  }
+
+  // Spectrum bars
+  if (!STATE.fftMagnitudes) return;
+  const mags = STATE.fftMagnitudes;
+  const halfN = mags.length;
+  let maxVal = 1e-6;
+  if (STATE.fftLogScale) {
+    for (let i = 1; i < halfN; i++) maxVal = Math.max(maxVal, mags[i]);
+    maxVal = Math.max(maxVal, 1e-3);
+  }
+
+  const barW = w / halfN;
+  ctx.fillStyle = 'rgba(124, 200, 255, 0.6)';
+  for (let i = 1; i < halfN; i++) {
+    const v = mags[i];
+    const normalized = STATE.fftLogScale
+      ? Math.log10(1 + 9 * v / maxVal)
+      : Math.min(1.0, v / maxVal);
+    const barH = normalized * (h - 20);
+    const x = i * barW;
+    ctx.fillRect(x, h - barH - 16, barW * 0.85, barH);
+  }
+
+  // Peak markers
+  if (STATE.fftMarkPeaks) {
+    const drawMarker = (freq, color, label) => {
+      if (freq <= 0 || freq > STATE.fftMaxFreq) return;
+      const x = (freq / STATE.fftMaxFreq) * w;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h - 16);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = color;
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`${label}=${freq.toFixed(2)}`, x + 4, 4);
+    };
+    drawMarker(STATE.omega0, 'rgba(255, 187, 102, 0.95)', 'ω₀');
+    drawMarker(STATE.omega, 'rgba(255, 102, 102, 0.95)', 'ω');
+  }
+
+  // Axis label
+  ctx.fillStyle = 'rgba(216, 225, 240, 0.45)';
+  ctx.font = '10px ui-monospace, monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('0', 4, h - 2);
+  ctx.textAlign = 'right';
+  ctx.fillText(`${STATE.fftMaxFreq.toFixed(2)} rad/s`, w - 4, h - 2);
+}
+
 let frame = 0;
 function animate() {
   const params = {
@@ -363,6 +584,12 @@ function animate() {
 
   updateGeometry(frame);
 
+  // Compute FFT every ~5 frames to avoid wasted CPU
+  if ((frame % 5) === 0 && STATE.history.length >= STATE.fftSize / 2) {
+    computeFFT();
+    if (STATE.viewMode !== 'phase') renderSpectrum();
+  }
+
   // HUD updates (sparingly)
   if ((frame % 6) === 0) {
     els.regime.textContent = classifyRegime(params);
@@ -372,6 +599,12 @@ function animate() {
     els.energy.value =
       totalEnergy(STATE.x, STATE.v, params).toFixed(3);
     els.tNow.value = STATE.t.toFixed(2);
+    if (STATE.fftMagnitudes) {
+      els.fftPeak.value = STATE.fftPeakMag.toFixed(4);
+      els.fftPeakFreq.value = STATE.fftPeakFreq.toFixed(3);
+      els.fftDC.value = STATE.fftDC.toFixed(4);
+      els.fftWindow.value = STATE.fftSize.toString();
+    }
   }
 
   frame++;
@@ -455,6 +688,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  // Spectrum canvas auto-resizes on next render via renderSpectrum()
 });
 
 animate();
