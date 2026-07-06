@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PHYS Oscillator Phase-Space Viz · 3.js</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="header">
+        <h1>
+          <span class="title-prefix">PHYS</span>
+          Damped & Driven Harmonic Oscillator
+        </h1>
+        <p class="subtitle">
+          Phase-space trajectory · ẍ + 2βẋ + ω₀²x = (F₀/m) cos(ωt)
+        </p>
+      </header>
+
+      <div id="hud">
+        <div class="hud-block">
+          <label class="row">
+            <span>β &nbsp;damping</span>
+            <input type="range" id="beta" min="0" max="2" step="0.01" value="0.15" />
+            <output id="beta-val">0.15</output>
+          </label>
+
+          <label class="row">
+            <span>ω₀ natural freq</span>
+            <input type="range" id="omega0" min="0.2" max="3" step="0.01" value="1.4" />
+            <output id="omega0-val">1.40</output>
+          </label>
+
+          <label class="row">
+            <span>F₀/m drive amp</span>
+            <input type="range" id="force" min="0" max="3" step="0.01" value="0.7" />
+            <output id="force-val">0.70</output>
+          </label>
+
+          <label class="row">
+            <span>ω &nbsp;drive freq</span>
+            <input type="range" id="omega" min="0" max="3" step="0.01" value="1.4" />
+            <output id="omega-val">1.40</output>
+          </label>
+
+          <div class="control-row">
+            <button id="reset">↻ Reset</button>
+            <button id="pause">⏸ Pause</button>
+            <button id="step">⏯ Step</button>
+          </div>
+
+          <div class="control-row">
+            <label class="check">
+              <input type="checkbox" id="show-energy" checked />
+              <span>Show energy</span>
+            </label>
+            <label class="check">
+              <input type="checkbox" id="show-grid" checked />
+              <span>Show grid</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="hud-block preset">
+          <p class="preset-label">Quick presets:</p>
+          <button data-preset="undamped">Undamped (β=0)</button>
+          <button data-preset="underdamped">Under-damped</button>
+          <button data-preset="critically">Critically damped</button>
+          <button data-preset="overdamped">Over-damped</button>
+          <button data-preset="resonance">Resonance (ω=ω₀)</button>
+          <button data-preset="beats">Beats (ω≈ω₀)</button>
+        </div>
+
+        <div class="hud-block readout">
+          <div class="row"><span>Regime</span><output id="regime"></output></div>
+          <div class="row"><span>Q-factor</span><output id="q-factor">—</output></div>
+          <div class="row"><span>x(t)</span><output id="x-now">—</output></div>
+          <div class="row"><span>ẋ(t)</span><output id="v-now">—</output></div>
+          <div class="row"><span>Energy E</span><output id="energy">—</output></div>
+          <div class="row"><span>Time t</span><output id="t-now">—</output></div>
+        </div>
+      </div>
+
+      <div id="three-root"></div>
+
+      <aside id="legend">
+        <h3>Reading the phase-space</h3>
+        <ul>
+          <li><b style="color:#7cf">Cyan trail</b>: damped oscillator (free or driven) — spirals inward when β > 0</li>
+          <li><b style="color:#fb6">Orange ball</b>: current state (x, ẋ)</li>
+          <li><b style="color:#f44">Red equator</b>: zero-velocity axis</li>
+          <li>Vertical axis = position x; horizontal axis = velocity ẋ</li>
+          <li>Hover + drag to orbit · Scroll to zoom</li>
+        </ul>
+      </aside>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

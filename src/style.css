@@ -1,0 +1,246 @@
+:root {
+  --bg: #0a0e1a;
+  --fg: #d8e1f0;
+  --accent: #7cf;
+  --warn: #fb6;
+  --hot: #f44;
+  --panel: rgba(10, 14, 26, 0.78);
+  --border: rgba(124, 200, 255, 0.25);
+  --mono: ui-monospace, 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "header header"
+    "hud    three";
+}
+
+.header {
+  grid-area: header;
+  padding: 12px 20px;
+  background: linear-gradient(90deg, rgba(10,14,26,0.95), rgba(10,14,26,0.4) 70%);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+
+.title-prefix {
+  font-family: var(--mono);
+  color: var(--accent);
+  background: rgba(124, 200, 255, 0.12);
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: rgba(216, 225, 240, 0.55);
+}
+
+#hud {
+  grid-area: hud;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 5;
+  backdrop-filter: blur(8px);
+}
+
+.hud-block {
+  background: rgba(124, 200, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.hud-block .row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-family: var(--mono);
+  margin: 6px 0;
+}
+
+.hud-block .row > span {
+  color: rgba(216, 225, 240, 0.7);
+}
+
+.hud-block input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+output {
+  font-family: var(--mono);
+  color: var(--accent);
+  min-width: 50px;
+  text-align: right;
+  font-size: 11px;
+}
+
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+button {
+  background: rgba(124, 200, 255, 0.08);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex: 1;
+  min-width: 60px;
+}
+
+button:hover {
+  background: rgba(124, 200, 255, 0.18);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.check {
+  display: flex;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.check input {
+  accent-color: var(--accent);
+}
+
+.preset-label {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: rgba(216, 225, 240, 0.55);
+  font-family: var(--mono);
+}
+
+.preset button {
+  margin-bottom: 4px;
+  background: rgba(255, 187, 102, 0.06);
+  border-color: rgba(255, 187, 102, 0.25);
+}
+
+.preset button:hover {
+  background: rgba(255, 187, 102, 0.15);
+}
+
+.readout output {
+  min-width: 80px;
+}
+
+#regime {
+  color: var(--accent);
+}
+
+#three-root {
+  grid-area: three;
+  position: relative;
+  background: radial-gradient(ellipse at center, #131826 0%, #050810 100%);
+  overflow: hidden;
+}
+
+#three-root canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#legend {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  width: 280px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 11px;
+  color: rgba(216, 225, 240, 0.8);
+  backdrop-filter: blur(8px);
+  z-index: 5;
+}
+
+#legend h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--accent);
+  font-family: var(--mono);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+#legend ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+#legend li {
+  margin: 3px 0;
+  line-height: 1.4;
+}
+
+@media (max-width: 720px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "header"
+      "hud"
+      "three";
+  }
+  #hud {
+    max-height: 35vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  #legend {
+    display: none;
+  }
+}
